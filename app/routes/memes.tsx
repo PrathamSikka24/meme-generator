@@ -2,10 +2,9 @@ import React, { useState } from 'react';
 import { json, LoaderFunction, redirect } from '@remix-run/node';
 import { useLoaderData, useNavigate } from '@remix-run/react';
 import type { ActionFunctionArgs } from "@remix-run/node";
-import Meme from './meme'
+import Meme from './meme';
+import testDatabase from './saveMeme';
 
-
-// Define the meme template interface
 interface MemeTemplate {
     id: string;
     name: string;
@@ -32,21 +31,25 @@ export const loader: LoaderFunction = async (): Promise<Response> => {
 
 
 export async function action({ request }: ActionFunctionArgs) {
+    const data = await request.json();
+    const memeUrl = data.memeUrl;
+    //const formData = await request.formData();
+    //const templateId = formData.get('templateId');
+    //const text = formData.get('text');
+    //const imageUrl = formData.get('imageUrl');
+    //console.log(templateId, text, imageUrl)
+    //console.log("hi")
     try {
-        // Assuming the incoming request body is JSON
-        const data = await request.json();
-        const imageUrl = data.imageUrl;
+      
 
-        // Validate the imageUrl is a string and not empty
-        if (typeof imageUrl !== 'string' || !imageUrl.trim()) {
+        if (typeof memeUrl !== 'string' || !memeUrl.trim()) {
             return json({ error: 'Invalid URL' }, { status: 400 });
         }
 
-        // Create and save the new Meme instance
-        const newMeme = new Meme({  imageUrl });
+        const newMeme = new Meme({imageUrl: memeUrl });
         await newMeme.save();
+        
 
-        // Return a success response with the ID of the newly created meme
         return json({ success: true, memeId: newMeme._id }, { status: 200 });
     } catch (error) {
         console.error('Failed to save meme:', error);
@@ -73,13 +76,15 @@ const MemeList: React.FC<MemeListProps> = ({ memes }) => {
     );
 };
 
+
 export default function Memes() {
     const templates = useLoaderData<MemeTemplate[]>();
     const [selectedTemplate, setSelectedTemplate] = useState<string>('');
     const [text, setText] = useState<string>('');
     const navigate = useNavigate();
 
-    const generateMeme = async () => {
+    const generateMeme = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
         console.log('Selected Template ID:', selectedTemplate);
         console.log('Text for meme:', text);
 
@@ -88,26 +93,26 @@ export default function Memes() {
             console.log('Generated Meme URL:', memeUrl);
 
             try {
-                const saveResponse = await fetch('/memes', {
+                const response = await fetch('/memes', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ imageUrl: memeUrl })
+                    body: JSON.stringify({ memeUrl })
                 });
 
-                if (!saveResponse.ok) {
-                    console.error('Failed to save the meme:', await saveResponse.text());
-                    navigate(`/meme-result?url=${encodeURIComponent(memeUrl)}`);
+                const result = await response.json();
+                if (!response.ok) {
+                    console.error('Failed to save the meme:', result);
                     return;
                 }
 
-                const result = await saveResponse.json();
                 console.log('Save successful, meme ID:', result.memeId);
-                navigate(`/view-meme/${result.memeId}`);
-            } catch (error) {
-                console.error('Error during saving meme:', error);
                 navigate(`/meme-result?url=${encodeURIComponent(memeUrl)}`);
+            } catch (error) {
+                navigate(`/meme-result?url=${encodeURIComponent(memeUrl)}`);
+
+                console.error('Error during saving meme:', error);
             }
         } else {
             console.error('Template ID or text is missing');
@@ -126,7 +131,7 @@ export default function Memes() {
                 ))}
             </div>
             {selectedTemplate && (
-                <form onSubmit={(e) => { e.preventDefault(); generateMeme(); }} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.75)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <form onSubmit={generateMeme} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.75)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                     <img src={`https://api.memegen.link/images/${selectedTemplate}.png`} alt="Selected Template" style={{ maxWidth: '80%', maxHeight: '80%' }} />
                     <input type="text" placeholder="Enter your text here" value={text} onChange={(e) => setText(e.target.value)} style={{ margin: '20px', padding: '10px', width: '50%' }} />
                     <button type="submit" style={{ padding: '10px 20px', fontSize: '16px', cursor: 'pointer' }}>Generate</button>
@@ -135,4 +140,3 @@ export default function Memes() {
         </div>
     );
 }
-export { MemeList} ;
